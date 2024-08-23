@@ -18,16 +18,10 @@ class YouTubeVideo:
         video_id = video_url.split("v=")[1][:11]
         return video_id
 
-    def get_transcript(self, languages="ko"):
-        try:
-            transcript = YouTubeTranscriptApi.get_transcript(
-                self.video_id, languages=[languages]
-            )
-        except:
-            languages = "en"
-            transcript = YouTubeTranscriptApi.get_transcript(
-                self.video_id, languages=[languages]
-            )
+    def get_transcript(self):
+        transcript = YouTubeTranscriptApi.get_transcript(
+            self.video_id, languages=["ko", "en"]
+        )
         return transcript
 
     def get_category(self):
