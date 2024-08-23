@@ -1,11 +1,15 @@
 from youtube_transcript_api import YouTubeTranscriptApi
 from kiwipiepy import Kiwi
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium import webdriver
 
 
 class YouTubeVideo:
     def __init__(self, video_url):
         self.video_url = video_url
         self.video_id = self.get_video_id(video_url)
+        self.category = self.get_category()
         self.transcript = self.get_transcript()
         self.shorts_group = self.get_shorts_group()
         self.fix_sentences_shorts_group = self.get_fix_sentences_shorts_group()
@@ -25,6 +29,31 @@ class YouTubeVideo:
                 self.video_id, languages=[languages]
             )
         return transcript
+
+    def get_category(self):
+        """
+        유튜브 영상 카테고리 반환
+        Args:
+            video_url: 유튜브 영상 URL
+            user_agent: User-Agent
+        Returns:
+            category: 유튜브 영상 카테고리
+        """
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+        # User-Agent로 변경
+        user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        options = webdriver.ChromeOptions()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument(f"user-agent={user_agent}")
+        driver = webdriver.Chrome(options=options)
+
+        driver.get(self.video_url)
+
+        html = driver.page_source
+        category = html.split('"category":"')[1].split('",')[0]
+        return category
 
     def get_shorts_group(self):
         """
@@ -77,7 +106,10 @@ if __name__ == "__main__":
     video_url = "https://www.youtube.com/watch?v=4JdzuB702wI"
     video = YouTubeVideo(video_url)
     video_id = video.video_id
+    category = video.category
     transcript = video.transcript
     shorts_group = video.shorts_group
 
-    print(f"Video ID: {video_id}\nShorts Group Example: {shorts_group[0]}")
+    print(
+        f"Video ID: {video_id}\nCategory: {category}\nShorts Group Example: {shorts_group[0]}"
+    )
