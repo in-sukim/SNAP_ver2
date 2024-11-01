@@ -3,15 +3,39 @@ from kiwipiepy import Kiwi
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
+import time
+from functools import wraps
+
+from pytubefix import YouTube
+from pytubefix.cli import on_progress
+import os
+from moviepy.editor import VideoFileClip
+
+import aiofiles
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 
+def time_measure_decorator(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        print(f"Execution time of {func.__name__}: {end_time - start_time:.4f} seconds")
+        return result
+
+    return wrapper
+
+
+@time_measure_decorator
 class YouTubeVideo:
     def __init__(self, video_url):
         self.video_url = video_url
         self.video_id = self.get_video_id(video_url)
         self.category = self.get_category()
         self.transcript = self.get_transcript()
-        self.shorts_group = self.get_shorts_group()
+        self.shorts_group, self.shorts_all_text = self.get_shorts_group()
         self.fix_sentences_shorts_group = self.get_fix_sentences_shorts_group()
 
     def get_video_id(self, video_url):
@@ -33,15 +57,14 @@ class YouTubeVideo:
         Returns:
             category: 유튜브 영상 카테고리
         """
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
-        # User-Agent로 변경
-        user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
-        options.add_argument(f"user-agent={user_agent}")
-        driver = webdriver.Chrome(options=options)
+
+        driver = webdriver.Chrome(
+            service=Service(ChromeDriverManager().install()), options=options
+        )
 
         driver.get(self.video_url)
 
@@ -63,6 +86,7 @@ class YouTubeVideo:
                 - value: 60초 이내 구간의 자막 텍스트
         """
         shorts = {}
+        shorts_all_text = ""
         for i in range(len(self.transcript)):
             trans = self.transcript[i]
             text, start, duration = trans["text"], trans["start"], trans["duration"]
@@ -70,8 +94,9 @@ class YouTubeVideo:
             if shorts_group not in shorts:
                 shorts[shorts_group] = []
             shorts[shorts_group] += [text]
-        shorts = {key: " ".join(text) for key, text in shorts.items()}
-        return shorts
+        shorts = {key: f"[{key}] " + " ".join(text) for key, text in shorts.items()}
+        shorts_all_text = "\n\n".join(shorts.values())
+        return shorts, shorts_all_text
 
     def get_fix_sentences_shorts_group(self):
         """
@@ -94,6 +119,97 @@ class YouTubeVideo:
                 fix_sencences += sen.text + "\n"
             self.shorts_group[key] = fix_sencences
         return self.shorts_group
+
+
+async def download_video(url: str) -> str:
+    """유튜브 영상 다운로드.
+
+    Args:
+        url: 유튜브 영상 URL
+
+    Returns:
+        str: 다운로드된 영상의 제목
+    """
+    yt = YouTube(url, on_progress_callback=on_progress)
+    print(yt.title)
+
+    ys = yt.streams.get_highest_resolution()
+    if not os.path.exists("input"):
+        os.makedirs("input")
+        
+    loop = asyncio.get_event_loop()
+    with ThreadPoolExecutor() as pool:
+        # lambda 함수를 사용하여 download 메서드 호출
+        await loop.run_in_executor(
+            pool, 
+            lambda: ys.download(output_path="input")
+        )
+
+    return yt.title
+
+
+async def make_clip_video(path, save_path, start_t, end_t):
+    try:
+        # 입력 파일 경로
+        input_file = path
+
+        # 출력 디렉토리 생성 (output/영상제목/)
+        output_dir = os.path.join("output", os.path.splitext(os.path.basename(path))[0])
+        os.makedirs(output_dir, exist_ok=True)
+
+        # 최종 저장 경로
+        final_save_path = os.path.join(output_dir, save_path)
+
+        # 클립 영상 생성 비동기 처리
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            await loop.run_in_executor(
+                pool,
+                lambda: process_video_clip(input_file, final_save_path, start_t, end_t),
+            )
+    except Exception as e:
+        print(f"Error processing video clip: {str(e)}")
+
+
+def process_video_clip(path, final_save_path, start_t, end_t):
+    try:
+        video = VideoFileClip(path)
+        duration = video.duration
+
+        try:
+            if start_t > duration or end_t > duration:
+                print(
+                    f"Start time or end time is greater than the video duration. Adjusting end time."
+                )
+                end_t = min(end_t, duration)
+                start_t = min(start_t, duration - 10)  # 최소 10초 전까지 클립 생성
+
+            clip = video.subclip(start_t, end_t)
+
+            # 임시 파일명으로 먼저 저장
+            temp_path = final_save_path + ".temp.mp4"
+            clip.write_videofile(
+                temp_path,
+                codec="libx264",
+                audio_codec="aac",
+                temp_audiofile=None,
+                remove_temp=True,
+                threads=4,
+            )
+
+            # 성공적으로 생성되면 최종 파일명으로 변경
+            if os.path.exists(temp_path):
+                if os.path.exists(final_save_path):
+                    os.remove(final_save_path)
+                os.rename(temp_path, final_save_path)
+
+        finally:
+            clip.close()
+            video.close()
+
+    except Exception as e:
+        print(f"Error in process_video_clip: {str(e)}")
+        raise
 
 
 if __name__ == "__main__":
