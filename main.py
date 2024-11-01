@@ -60,13 +60,14 @@ async def main(url: str) -> None:
         reduce_results = reduce_chain.invoke(
             {"text": concat_map_results, "category": category}
         ).split(",")
+        reduce_results = list(map(int, reduce_results))
         print(f"Reduce results:\n{reduce_results}")
 
         # 시간 세그먼트 계산
         time_segments = [
             (
-                (int(idx) * VIDEO_SEGMENT_LENGTH) - CLIP_PADDING,
-                ((int(idx) + 1) * VIDEO_SEGMENT_LENGTH) + CLIP_PADDING,
+                (idx * VIDEO_SEGMENT_LENGTH) - CLIP_PADDING,
+                ((idx + 1) * VIDEO_SEGMENT_LENGTH) + CLIP_PADDING,
             )
             for idx in reduce_results
         ]
