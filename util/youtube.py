@@ -15,6 +15,9 @@ import aiofiles
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
+import re
+import unicodedata
+
 
 def time_measure_decorator(func):
     @wraps(func)
@@ -35,8 +38,9 @@ class YouTubeVideo:
         self.video_id = self.get_video_id(video_url)
         self.category = self.get_category()
         self.transcript = self.get_transcript()
+        self.duration = self.get_duration()
         self.shorts_group, self.shorts_all_text = self.get_shorts_group()
-        self.fix_sentences_shorts_group = self.get_fix_sentences_shorts_group()
+        # self.fix_sentences_shorts_group = self.get_fix_sentences_shorts_group()
 
     def get_video_id(self, video_url):
         video_id = video_url.split("v=")[1][:11]
@@ -120,6 +124,35 @@ class YouTubeVideo:
             self.shorts_group[key] = fix_sencences
         return self.shorts_group
 
+    def get_duration(self) -> int:
+        """영상 길이(초) 반환."""
+        yt = YouTube(self.video_url)
+        return yt.length  # 초 단위로 반환
+
+
+def normalize_filename(title: str) -> str:
+    """파일명 정규화.
+
+    Args:
+        title: 원본 파일명
+
+    Returns:
+        str: 정규화된 파일명
+    """
+    # 유니코드 정규화 (NFKD)
+    title = unicodedata.normalize("NFKD", title)
+
+    # 파일명으로 사용할 수 없는 문자 제거/변환
+    title = re.sub(r'[\\/*?:"<>|]', "", title)  # Windows 금지 문자 제거
+    title = re.sub(r"\s+", "_", title)  # 공백을 언더스코어로 변환
+    title = re.sub(r"[^\w\-_.]", "", title)  # 알파벳, 숫자, 하이픈, 언더스코어만 허용
+
+    # 길이 제한 (파일 시스템 제한 고려)
+    if len(title) > 255:
+        title = title[:255]
+
+    return title
+
 
 async def download_video(url: str) -> str:
     """유튜브 영상 다운로드.
@@ -133,19 +166,25 @@ async def download_video(url: str) -> str:
     yt = YouTube(url, on_progress_callback=on_progress)
     print(yt.title)
 
+    # 파일명 정규화
+    normalized_title = normalize_filename(yt.title)
+
     ys = yt.streams.get_highest_resolution()
+
     if not os.path.exists("input"):
         os.makedirs("input")
-        
+
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor() as pool:
-        # lambda 함수를 사용하여 download 메서드 호출
+        # 정규화된 파일명으로 저장
         await loop.run_in_executor(
-            pool, 
-            lambda: ys.download(output_path="input")
+            pool,
+            lambda: ys.download(
+                output_path="input", filename=f"{normalized_title}.mp4"
+            ),
         )
 
-    return yt.title
+    return normalized_title
 
 
 async def make_clip_video(path, save_path, start_t, end_t):

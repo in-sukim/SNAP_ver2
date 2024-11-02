@@ -1,10 +1,11 @@
 from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
+from util.constants import DEFAULT_MODEL
 
 
 def set_map_chain():
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model=DEFAULT_MODEL, temperature=0)
     map_template = """
     You are a helpful assistant that aids in extracting potential hot clip segments from YouTube video scripts based on the characteristics of {category} content.
     When analyzing the transcript, please consider the following format:
@@ -42,22 +43,22 @@ def set_map_chain():
 
 
 def set_reduce_chain():
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    llm = ChatOpenAI(model=DEFAULT_MODEL, temperature=0)
     reduce_template = """
     You are a helpful assistant that aids in extracting potential hot clip segments from YouTube video scripts based on the characteristics of {category} content.
     INPUT text is a concatenation of the selected segments from the previous MAP step.
-    Please extract the five most important and interesting parts from the INPUT text.
+    Please extract the maximum {target_count} most important and interesting segments from the INPUT text(['number']).
 
     Example:
 
     INPUT
     [0] text
     [1] text
-    [2] text
-    [3] text
-    [4] text
-    [5] text
-    [6] text
+    [2] text(if you select this segment)
+    [3] text(if you select this segment)
+    [4] text(if you select this segment)
+    [5] text(if you select this segment)
+    [6] text(if you select this segment)
 
     OUTPUT
     2,3,4,5,6
