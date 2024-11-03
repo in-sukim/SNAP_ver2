@@ -5,18 +5,21 @@ import asyncio
 import subprocess
 from .constants import *
 
+
 @dataclass
 class VideoSegment:
     """영상 세그먼트 정보.
-    
+
     Attributes:
         start_time: 시작 시간(초)
-        end_time: 종료 시간(초) 
+        end_time: 종료 시간(초)
         index: 세그먼트 인덱스
     """
+
     start_time: int
     end_time: int
     index: int
+
 
 class FFmpegProcessor:
     """FFmpeg 기반 영상 처리 클래스."""
@@ -38,7 +41,7 @@ class FFmpegProcessor:
 
     async def process_segments(self, time_segments: List[Tuple[int, int]]) -> None:
         """영상 세그먼트 병렬 처리.
-        
+
         Args:
             time_segments: 시작/종료 시간 튜플 리스트
         """
@@ -50,38 +53,38 @@ class FFmpegProcessor:
         await asyncio.gather(*tasks)
 
     async def _process_segment(self, segment: VideoSegment) -> None:
-        """개별 세그먼트 처리.
-        
-        Args:
-            segment: 처리할 세그먼트 정보
-        """
+        """개별 세그먼트 처리."""
         output_path = os.path.join(self.output_dir, f"output_{segment.index}.mp4")
         temp_path = f"{output_path}.temp.mp4"
 
         try:
             duration = segment.end_time - segment.start_time
             cmd = [
-                'ffmpeg',
-                '-y',  # 기존 파일 덮어쓰기
-                '-ss', str(segment.start_time),  # 시작 시간
-                '-i', self.input_path,  # 입력 파일
-                '-t', str(duration),  # 지속 시간
-                '-c:v', 'libx264',  # 비디오 코덱
-                '-c:a', 'aac',  # 오디오 코덱
-                '-preset', 'ultrafast',  # 인코딩 속도 설정
-                '-crf', '23',  # 화질 설정 (0-51, 낮을수록 좋음)
-                '-avoid_negative_ts', 'make_zero',
-                '-async', '1',
-                temp_path
+                "ffmpeg",
+                "-y",  # 기존 파일 덮어쓰기
+                "-ss",
+                str(segment.start_time),  # 시작 시간
+                "-i",
+                self.input_path,  # 입력 파일
+                "-t",
+                str(duration),  # 지속 시간
+                "-c:v",
+                "copy",  # 비디오 스트림 복사 (재인코딩 없음)
+                "-c:a",
+                "copy",  # 오디오 스트림 복사 (재인코딩 없음)
+                "-avoid_negative_ts",
+                "make_zero",
+                temp_path,
             ]
 
-            # FFmpeg 명령 실행
+            # GPU 가속 지원 확인 및 적용
+            if self._check_gpu_support():
+                cmd = self._add_gpu_options(cmd)
+
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            
+
             await process.communicate()
 
             if process.returncode == 0 and os.path.exists(temp_path):
@@ -89,9 +92,56 @@ class FFmpegProcessor:
                     os.remove(output_path)
                 os.rename(temp_path, output_path)
             else:
-                raise RuntimeError(f"FFmpeg failed with return code {process.returncode}")
+                raise RuntimeError(
+                    f"FFmpeg failed with return code {process.returncode}"
+                )
 
         except Exception as e:
             print(f"Error processing segment {segment.index}: {str(e)}")
             if os.path.exists(temp_path):
-                os.remove(temp_path) 
+                os.remove(temp_path)
+
+    def _check_gpu_support(self) -> bool:
+        """GPU 가속 지원 여부 확인."""
+        try:
+            # NVIDIA GPU 확인
+            result = subprocess.run(["nvidia-smi"], capture_output=True)
+            if result.returncode == 0:
+                return True
+
+            # Apple Silicon 확인
+            if os.path.exists("/usr/sbin/sysctl"):
+                result = subprocess.run(
+                    ["sysctl", "machdep.cpu.brand_string"], capture_output=True
+                )
+                if b"Apple" in result.stdout:
+                    return True
+
+            return False
+        except:
+            return False
+
+    def _add_gpu_options(self, cmd: list) -> list:
+        """GPU 가속 옵션 추가."""
+        try:
+            # NVIDIA GPU용 옵션
+            if subprocess.run(["nvidia-smi"], capture_output=True).returncode == 0:
+                return [
+                    "ffmpeg",
+                    "-hwaccel",
+                    "cuda",
+                    "-hwaccel_output_format",
+                    "cuda",
+                ] + cmd[1:]
+
+            # Apple Silicon용 옵션
+            if os.path.exists("/usr/sbin/sysctl"):
+                result = subprocess.run(
+                    ["sysctl", "machdep.cpu.brand_string"], capture_output=True
+                )
+                if b"Apple" in result.stdout:
+                    return ["ffmpeg", "-hwaccel", "videotoolbox"] + cmd[1:]
+
+            return cmd
+        except:
+            return cmd

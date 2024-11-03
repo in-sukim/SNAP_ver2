@@ -8,7 +8,7 @@ INPUT_DIR = "input"  # 입력 디렉토리
 OUTPUT_DIR = "output"  # 출력 디렉토리
 
 # 모델 설정
-DEFAULT_MODEL = "gpt-4o-mini"  # 기본 모델명
+DEFAULT_MODEL = "gpt-4o"  # 기본 모델명
 DEFAULT_TEMPERATURE = 0  # 온도값
 
 # 언어 설정
