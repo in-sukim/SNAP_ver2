@@ -30,6 +30,14 @@ def validate_youtube_url(url: str) -> bool:
     return "youtube.com/watch?v=" in url or "youtu.be/" in url
 
 
+def reset_session_state():
+    """세션 상태 초기화"""
+    st.session_state.processing_complete = False
+    st.session_state.output_files = []
+    clean_directories()
+    st.rerun()
+
+
 async def process_video(url: str):
     """영상 처리 실행."""
     with st.spinner("영상 처리 중..."):
@@ -38,69 +46,87 @@ async def process_video(url: str):
             clean_directories()
 
             await main(url)
+            st.session_state.processing_complete = True
             st.success("처리가 완료되었습니다!")
 
-            # 결과 영상 표시
+            # 결과 영상 정보 저장
             output_files = []
             for root, dirs, files in os.walk(OUTPUT_DIR):
                 for file in files:
                     if file.endswith(".mp4"):
-                        output_files.append(os.path.join(root, file))
-
-            if output_files:
-                st.subheader("추출된 하이라이트 클립")
-                for idx, file in enumerate(sorted(output_files), 1):
-                    col1, col2 = st.columns([3, 1])
-
-                    # 영상 표시
-                    with col1:
-                        with open(file, "rb") as f:
+                        file_path = os.path.join(root, file)
+                        title = os.path.splitext(file)[0]
+                        with open(file_path, "rb") as f:
                             video_bytes = f.read()
-                        st.video(video_bytes)
-
-                    # 다운로드 버튼
-                    with col2:
-                        st.download_button(
-                            label=f"클립 {idx} 다운로드",
-                            data=video_bytes,
-                            file_name=f"highlight_clip_{idx}.mp4",
-                            mime="video/mp4",
-                        )
+                        output_files.append((file_path, title, video_bytes))
+            
+            st.session_state.output_files = output_files
 
         except Exception as e:
             st.error(f"오류가 발생했습니다: {str(e)}")
 
 
-def main_app():
-    """Streamlit 앱 메인 함수."""
-    st.title("🎬 YouTube 하이라이트 추출기")
+def display_results():
+    """처리 결과 표시"""
+    if st.session_state.output_files:
+        st.subheader("추출된 하이라이트 클립")
+        
+        for idx, (file_path, title, video_bytes) in enumerate(st.session_state.output_files, 1):
+            with st.container():
+                st.markdown(f"### {title}")
+                
+                col1, col2 = st.columns([3, 1])
 
-    st.markdown(
-        """
-    ### 사용 방법
-    1. YouTube 영상 URL을 입력하세요
-    2. '처리 시작' 버튼을 클릭하세요
-    3. 처리가 완료되면 하이라이트 클립이 표시됩니다
-    4. 원하는 클립의 다운로드 버튼을 클릭하여 저장하세요
-    """
-    )
+                with col1:
+                    st.video(video_bytes)
 
+                with col2:
+                    st.download_button(
+                        label=f"클립 다운로드",
+                        data=video_bytes,
+                        file_name=f"{title}.mp4",
+                        mime="video/mp4",
+                    )
+                
+                st.divider()
+
+
+def app_main():
+    """스트림릿 앱 메인 함수"""
     # 세션 상태 초기화
-    if "processing" not in st.session_state:
-        st.session_state.processing = False
+    if 'processing_complete' not in st.session_state:
+        st.session_state.processing_complete = False
+    if 'output_files' not in st.session_state:
+        st.session_state.output_files = []
 
-    url = st.text_input("YouTube URL 입력")
+    st.title("YouTube Highlight Extractor")
+    st.markdown("YouTube 영상의 하이라이트를 자동으로 추출합니다.")
 
-    if st.button("처리 시작", disabled=not url or st.session_state.processing):
-        if not validate_youtube_url(url):
+    # 상단 컨트롤 영역
+    col1, col2, col3 = st.columns([4, 2, 1])
+    
+    with col1:
+        url = st.text_input("YouTube URL을 입력하세요")
+    with col2:
+        extract_button = st.button("하이라이트 추출")
+    with col3:
+        if st.button("🔄 새로고침"):
+            reset_session_state()
+
+    if extract_button:
+        if not url:
+            st.warning("URL을 입력해주세요.")
+        elif not validate_youtube_url(url):
             st.error("올바른 YouTube URL을 입력해주세요.")
-            return
+        else:
+            st.session_state.processing_complete = False
+            st.session_state.output_files = []
+            asyncio.run(process_video(url))
 
-        st.session_state.processing = True
-        asyncio.run(process_video(url))
-        st.session_state.processing = False
+    # 처리 완료 후 결과 표시
+    if st.session_state.processing_complete:
+        display_results()
 
 
 if __name__ == "__main__":
-    initialize_directories()
-    main_app()
+    app_main()

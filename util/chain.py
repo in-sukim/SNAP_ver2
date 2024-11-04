@@ -72,3 +72,31 @@ def set_reduce_chain():
     reduce_chain = reduce_prompt | llm | StrOutputParser()
 
     return reduce_chain
+
+
+def set_title_chain():
+    """클립 제목 생성을 위한 체인 설정"""
+    llm = ChatOpenAI(model=DEFAULT_MODEL, temperature=0.7)  # 약간의 창의성을 위해 temperature 조정
+    
+    title_template = """
+    You are a helpful assistant that creates engaging YouTube clip titles.
+    Based on the transcript and category of the video clip, create a catchy and descriptive Korean title.
+    The title should be between 10 and 30 characters.
+    
+    Category: {category}
+    Transcript: {text}
+    
+    Generate a title that:
+    1. Captures the main point or highlight of the clip
+    2. Uses engaging language appropriate for YouTube
+    3. Maintains the original context and tone
+    4. Includes relevant keywords
+    5. Corrects any spelling or typographical errors in the transcript appropriately
+    
+    OUTPUT FORMAT: Just return the title without any explanations or quotes.
+    """
+    
+    title_prompt = PromptTemplate.from_template(title_template)
+    title_chain = title_prompt | llm | StrOutputParser()
+    
+    return title_chain

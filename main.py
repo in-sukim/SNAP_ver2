@@ -2,23 +2,44 @@ from typing import List, Tuple
 import asyncio
 import time
 import os
-from util.chain import set_map_chain, set_reduce_chain
+from util.chain import set_map_chain, set_reduce_chain, set_title_chain
 from util.youtube import YouTubeVideo, download_video, time_measure_decorator
 from util.ffmpeg_processor import FFmpegProcessor
 from util.constants import *
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 
-async def process_video_segments(segments: List[Tuple[int, int]], title: str) -> None:
+async def process_video_segments(segments: List[Tuple[int, int]], title: str, video: YouTubeVideo) -> None:
     """영상 세그먼트 처리.
 
     Args:
         segments: 시작/종료 시간 튜플 리스트
         title: 영상 제목
+        video: YouTubeVideo 객체
     """
     input_path = os.path.join(INPUT_DIR, f"{title}.mp4")
     processor = FFmpegProcessor(input_path)
-    await processor.process_segments(segments)
+    
+    # 각 세그먼트별 제목 생성
+    title_chain = set_title_chain()
+    segment_titles = []
+    
+    for idx, (start_t, end_t) in enumerate(segments):
+        # 해당 구간의 자막 추출
+        segment_text = ""
+        for trans in video.transcript:
+            if start_t <= trans["start"] <= end_t:
+                segment_text += trans["text"] + " "
+        
+        # 제목 생성
+        clip_title = title_chain.invoke({
+            "category": video.category,
+            "text": segment_text
+        })
+        segment_titles.append(clip_title)
+    
+    # 세그먼트 처리 시 생성된 제목 전달
+    await processor.process_segments(segments, segment_titles)
 
 
 def get_target_clip_count(duration: int) -> int:
@@ -99,7 +120,11 @@ async def process_map_reduce(video, category, shorts_group, shorts_all_text):
 
 
 async def main(url: str) -> None:
-    """메인 실행 함수."""
+    """메인 실행 함수.
+    
+    Args:
+        url: YouTube URL
+    """
     try:
         start_time = time.time()
 
@@ -121,7 +146,7 @@ async def main(url: str) -> None:
         )
 
         # 클립 생성
-        await process_video_segments(time_segments, input_title)
+        await process_video_segments(time_segments, input_title, video)
         print(f"Total execution time: {time.time() - start_time:.2f} seconds")
 
     except Exception as e:

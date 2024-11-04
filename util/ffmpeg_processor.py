@@ -39,22 +39,26 @@ class FFmpegProcessor:
         os.makedirs(output_dir, exist_ok=True)
         return output_dir
 
-    async def process_segments(self, time_segments: List[Tuple[int, int]]) -> None:
+    async def process_segments(self, time_segments: List[Tuple[int, int]], titles: List[str] = None) -> None:
         """영상 세그먼트 병렬 처리.
 
         Args:
             time_segments: 시작/종료 시간 튜플 리스트
+            titles: 각 세그먼트의 제목 리스트 (선택사항)
         """
         tasks = []
         for idx, (start_t, end_t) in enumerate(time_segments):
             segment = VideoSegment(start_t, end_t, idx)
-            task = self._process_segment(segment)
+            title = titles[idx] if titles else None
+            task = self._process_segment(segment, title)
             tasks.append(task)
         await asyncio.gather(*tasks)
 
-    async def _process_segment(self, segment: VideoSegment) -> None:
+    async def _process_segment(self, segment: VideoSegment, title: str = None) -> None:
         """개별 세그먼트 처리."""
-        output_path = os.path.join(self.output_dir, f"output_{segment.index}.mp4")
+        # 제목이 없으면 기본 번호 사용
+        file_name = f"{title}.mp4" if title else f"output_{segment.index}.mp4"
+        output_path = os.path.join(self.output_dir, file_name)
         temp_path = f"{output_path}.temp.mp4"
 
         try:
