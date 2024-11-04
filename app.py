@@ -190,14 +190,15 @@ def app_main():
     st.markdown("YouTube 영상의 하이라이트를 자동으로 추출합니다.")
 
     # 상단 컨트롤 영역
-    col1, col2, col3 = st.columns([4, 2, 1])
+    col1, col2, col3 = st.columns([6, 2, 1])  # 비율 조정
     
     with col1:
         url = st.text_input("YouTube URL을 입력하세요")
     with col2:
-        extract_button = st.button("하이라이트 추출")
+        extract_button = st.button("하이라이트 추출", use_container_width=True)
     with col3:
-        if st.button("🔄 새로고침"):
+        refresh_button = st.button("🔄", use_container_width=True)
+        if refresh_button:
             reset_session_state()
 
     if extract_button:
