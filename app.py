@@ -4,6 +4,9 @@ from main import main
 import os
 import shutil
 from util.constants import INPUT_DIR, OUTPUT_DIR
+from typing import Tuple
+from util.ffmpeg_processor import FFmpegProcessor, VideoSegment
+from util.video_utils import get_video_duration
 
 st.set_page_config(
     page_title="YouTube Highlight Extractor", page_icon="🎬", layout="wide"
@@ -66,6 +69,61 @@ async def process_video(url: str):
             st.error(f"오류가 발생했습니다: {str(e)}")
 
 
+def process_video_segment(video_bytes: bytes, start: float, end: float) -> bytes:
+    """비디오 세그먼트를 추출하는 함수"""
+    # 임시 디렉토리 생성
+    os.makedirs(INPUT_DIR, exist_ok=True)
+    
+    temp_input = os.path.join(INPUT_DIR, "temp_input.mp4")
+    temp_output = os.path.join(INPUT_DIR, "temp_output.mp4")
+    
+    # 입력 비디오 저장
+    with open(temp_input, "wb") as f:
+        f.write(video_bytes)
+    
+    try:
+        processor = FFmpegProcessor(temp_input)
+        # VideoSegment 객체 생성 및 _process_segment 호출
+        segment = VideoSegment(start_time=int(start), end_time=int(end), index=0)
+        # temp_output의 디렉토리가 존재하는지 확인
+        os.makedirs(os.path.dirname(temp_output), exist_ok=True)
+        
+        asyncio.run(processor._process_segment(segment, title=os.path.basename(temp_output)))
+        
+        # 파일이 생성될 때까지 잠시 대기
+        if not os.path.exists(temp_output):
+            temp_output = os.path.join(processor.output_dir, f"{os.path.basename(temp_output)}.mp4")
+        
+        with open(temp_output, "rb") as f:
+            result = f.read()
+        
+        # 임시 파일 삭제
+        if os.path.exists(temp_input):
+            os.remove(temp_input)
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        
+        return result
+    except Exception as e:
+        st.error(f"비디오 세그먼트 추출 중 오류 발생: {e}")
+        # 임시 파일 정리
+        if os.path.exists(temp_input):
+            os.remove(temp_input)
+        if os.path.exists(temp_output):
+            os.remove(temp_output)
+        return video_bytes
+
+
+def format_time(seconds: float) -> str:
+    """초를 시:분:초 형식으로 변환"""
+    hours = int(seconds // 3600)
+    minutes = int((seconds % 3600) // 60)
+    seconds = int(seconds % 60)
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    return f"{minutes:02d}:{seconds:02d}"
+
+
 def display_results():
     """처리 결과 표시"""
     if st.session_state.output_files:
@@ -75,18 +133,47 @@ def display_results():
             with st.container():
                 st.markdown(f"### {title}")
                 
+                # 비디오 정보 추출
+                temp_path = os.path.join(INPUT_DIR, f"temp_{idx}.mp4")
+                with open(temp_path, "wb") as f:
+                    f.write(video_bytes)
+                
+                duration = get_video_duration(temp_path)
+                
                 col1, col2 = st.columns([3, 1])
 
                 with col1:
-                    st.video(video_bytes)
+                    # 시간 조절 슬라이더 (1초 단위로 조절)
+                    time_range = st.slider(
+                        "클립 구간 설정",
+                        min_value=0.0,
+                        max_value=float(int(duration)),  # 소수점 제거
+                        value=(0.0, float(int(duration))),
+                        step=1.0,  # 1초 단위로 변경
+                        key=f"time_range_{idx}"
+                    )
+                    
+                    # 선택된 구간 정보를 별도로 표시
+                    st.caption(
+                        f"선택된 구간: {format_time(time_range[0])} ~ {format_time(time_range[1])} "
+                        f"(총 {format_time(time_range[1] - time_range[0])})"
+                    )
+                    
+                    # 현재 선택된 구간의 비디오 표시
+                    current_video = process_video_segment(video_bytes, time_range[0], time_range[1])
+                    st.video(current_video)
 
                 with col2:
+                    # 현재 선택된 구간의 비디오 다운로드
                     st.download_button(
                         label=f"클립 다운로드",
-                        data=video_bytes,
+                        data=current_video,
                         file_name=f"{title}.mp4",
                         mime="video/mp4",
                     )
+                
+                # 임시 파일 삭제
+                os.remove(temp_path)
                 
                 st.divider()
 
