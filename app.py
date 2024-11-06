@@ -434,6 +434,7 @@ def display_results():
                         st.markdown("</div>", unsafe_allow_html=True)
 
 
+# 커스텀 CSS 적용
 def apply_custom_css():
     st.markdown(
         """
