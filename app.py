@@ -648,6 +648,8 @@ def app_main():
         st.session_state.output_files = []
     if "font_file" not in st.session_state:
         st.session_state.font_file = None
+    if "openai_api_key" not in st.session_state:
+        st.session_state.openai_api_key = None
 
     # 메인 타이틀과 설명
     st.markdown(
@@ -661,6 +663,14 @@ def app_main():
 
     # 모든 입력 요소를 form으로 감싸기
     with st.form("main_form", clear_on_submit=False):
+        # OpenAI API 키 입력 필드
+        openai_api_key = st.text_input(
+            "OpenAI API 키를 입력하세요",
+            type="password",
+            value=st.session_state.openai_api_key if st.session_state.openai_api_key else "",
+            help="OpenAI API 키가 필요합니다. https://platform.openai.com/account/api-keys 에서 발급받을 수 있습니다."
+        )
+
         # URL 입력 필드
         url = st.text_input(
             "YouTube URL을 입력하세요",
@@ -720,11 +730,18 @@ def app_main():
         reset_session_state()
 
     if extract_button:
-        if not url:
+        if not openai_api_key:
+            st.error("OpenAI API 키를 입력해주세요.")
+        elif not url:
             st.warning("URL을 입력해주세요.")
         elif not validate_youtube_url(url):
             st.error("올바른 YouTube URL을 입력해주세요.")
         else:
+            # API 키를 세션 상태에 저장
+            st.session_state.openai_api_key = openai_api_key
+            # 환경 변수로 설정
+            os.environ["OPENAI_API_KEY"] = openai_api_key
+            
             st.session_state.processing_complete = False
             st.session_state.output_files = []
             asyncio.run(process_video(url))
