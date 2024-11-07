@@ -387,14 +387,13 @@ def display_results():
                                         st.session_state[f"status_text_{idx}"] = (
                                             "✅ 변환 완료!"
                                         )
+                                        st.session_state[f"converting_{idx}"] = False
                                 except Exception as e:
                                     st.error(f"변환 중 오류 발생: {e}")
                                     st.session_state[f"status_text_{idx}"] = (
                                         "❌ 변환 실패"
                                     )
-                                finally:
                                     st.session_state[f"converting_{idx}"] = False
-                                    st.rerun()
 
                             # 상태 메시지 표시
                             if status_text := st.session_state.get(
