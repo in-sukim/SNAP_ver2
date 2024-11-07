@@ -59,44 +59,46 @@ def reset_session_state():
 
 async def process_video(url: str):
     """영상 처리 실행."""
-    with st.spinner("영상 처리 중..."):
-        try:
-            # 이전 결과 정리
-            clean_directories()
+    try:
+        # 이전 결과 정리
+        clean_directories()
 
-            # 모든 상태 초기화
-            if "clips_initialized" in st.session_state:
-                del st.session_state.clips_initialized
+        # 모든 상태 초기화
+        if "clips_initialized" in st.session_state:
+            del st.session_state.clips_initialized
 
-            for idx in range(1, 11):
-                if f"converted_video_{idx}" in st.session_state:
-                    del st.session_state[f"converted_video_{idx}"]
-                if f"converting_{idx}" in st.session_state:
-                    del st.session_state[f"converting_{idx}"]
-                if f"status_text_{idx}" in st.session_state:
-                    del st.session_state[f"status_text_{idx}"]
-                if f"overlay_text_{idx}" in st.session_state:
-                    del st.session_state[f"overlay_text_{idx}"]
+        for idx in range(1, 11):
+            if f"converted_video_{idx}" in st.session_state:
+                del st.session_state[f"converted_video_{idx}"]
+            if f"converting_{idx}" in st.session_state:
+                del st.session_state[f"converting_{idx}"]
+            if f"status_text_{idx}" in st.session_state:
+                del st.session_state[f"status_text_{idx}"]
+            if f"overlay_text_{idx}" in st.session_state:
+                del st.session_state[f"overlay_text_{idx}"]
 
+        # 중앙 정렬된 스피너와 로딩 메시지
+        with st.spinner("🎬 영상 처리 중..."):
             await main(url)
             st.session_state.processing_complete = True
-            st.success("처리가 완료되었습니다!")
 
-            # 결과 영상 정보 저장
-            output_files = []
-            for root, dirs, files in os.walk(OUTPUT_DIR):
-                for file in files:
-                    if file.endswith(".mp4"):
-                        file_path = os.path.join(root, file)
-                        title = os.path.splitext(file)[0]
-                        with open(file_path, "rb") as f:
-                            video_bytes = f.read()
-                        output_files.append((file_path, title, video_bytes))
+        st.success("처리가 완료되었습니다!")
 
-            st.session_state.output_files = output_files
+        # 결과 영상 정보 저장
+        output_files = []
+        for root, dirs, files in os.walk(OUTPUT_DIR):
+            for file in files:
+                if file.endswith(".mp4"):
+                    file_path = os.path.join(root, file)
+                    title = os.path.splitext(file)[0]
+                    with open(file_path, "rb") as f:
+                        video_bytes = f.read()
+                    output_files.append((file_path, title, video_bytes))
 
-        except Exception as e:
-            st.error(f"오류가 발생했습니다: {str(e)}")
+        st.session_state.output_files = output_files
+
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {str(e)}")
 
 
 def process_video_segment_preview(
@@ -302,7 +304,7 @@ def display_results():
                                 key=f"time_range_{idx}",
                             )
 
-                            # 텍스트나 구간이 변경되었는지 확인
+                            # 텍스트나 구이 변경되었는지 확인
                             current_time_range = st.session_state[
                                 f"last_time_range_{idx}"
                             ]
@@ -529,7 +531,7 @@ def apply_custom_css():
         
         @media (max-width: 480px) {
             div[data-testid="stForm"] {
-                width: 98%;  /* 더 작은 화면에서 더 넓게 */
+                width: 98%;  /* 더 작 화면에서 더 넓게 */
                 padding: 1rem;  /* 패딩 더 축소 */
             }
         }
@@ -603,6 +605,30 @@ def apply_custom_css():
             .clip-container {
                 padding: 1.5rem;
             }
+        }
+
+        /* 스피너 컨테이너 중앙 정렬 */
+        .stSpinner > div {
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 150px;
+        }
+        
+        /* 스피너 텍스트 스타일링 */
+        .stSpinner > div > div,
+        .stSpinner > div > div > div {
+            font-size: 3.5rem !important;  /* 더 큰 폰트 사이즈로 변경 */
+            color: #000000 !important;     /* 검은색 */
+            font-weight: 500 !important;   /* 글씨 두께 */
+            text-align: center !important; /* 중앙 정렬 강제 */
+        }
+
+        /* 스피너 아이콘 크기 조정 */
+        .stSpinner > div > div > div > div {
+            width: 3rem !important;
+            height: 3rem !important;
         }
         </style>
     """,
