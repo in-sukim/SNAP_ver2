@@ -151,9 +151,16 @@ def process_video_segment_preview(
 async def process_video_segment(
     video_bytes: bytes, start: float, end: float, overlay_text: str
 ) -> bytes:
-    """비디오 세그먼트를 9:16 비율로 변환하고 텍스트를 추가하여 추출하는 함수"""
+    """
+    비디오 세그먼트를 9:16 비율로 변환하고 텍스트를 추가하여 추출하는 함수
+    영상 길이가 1분을 넘으면 1분으로 제한
+    """
     os.makedirs(INPUT_DIR, exist_ok=True)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # 영상 길이가 1분을 넘으면 1분으로 제한
+    if end - start > 60:
+        end = start + 60
 
     temp_input = os.path.join(INPUT_DIR, "temp_input.mp4")
     temp_output = os.path.join(INPUT_DIR, "temp_output.mp4")
@@ -516,7 +523,7 @@ def apply_custom_css():
         /* 파일 업로더 레이블 스타일링 */
         .uploadedFile > label {
             white-space: normal !important;  /* 줄 바꿈 허용 */
-            min-height: 1.6em;  /* 최�� 높이 설정 */
+            min-height: 1.6em;  /* 최 높이 설정 */
             line-height: 1.4;  /* 줄 간격 조정 */
         }
         
