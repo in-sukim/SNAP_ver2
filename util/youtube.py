@@ -40,7 +40,6 @@ class YouTubeVideo:
         self.transcript = self.get_transcript()
         self.duration = self.get_duration()
         self.shorts_group, self.shorts_all_text = self.get_shorts_group()
-        # self.fix_sentences_shorts_group = self.get_fix_sentences_shorts_group()
 
     def get_video_id(self, video_url):
         video_id = video_url.split("v=")[1][:11]
@@ -66,14 +65,17 @@ class YouTubeVideo:
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
 
-        driver = webdriver.Chrome(
-            service=Service(ChromeDriverManager().install()), options=options
-        )
+        # ChromeDriver를 자동으로 설치하고 관리
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
 
-        driver.get(self.video_url)
+        try:
+            driver.get(self.video_url)
+            html = driver.page_source
+            category = html.split('"category":"')[1].split('",')[0]
+        finally:
+            driver.quit()
 
-        html = driver.page_source
-        category = html.split('"category":"')[1].split('",')[0]
         return category
 
     def get_shorts_group(self):
@@ -114,7 +116,6 @@ class YouTubeVideo:
                 - key: 60초 이내 구간 index(0부터 시작)
                 - value: 60초 이내 구간의 자막 문장 분할(kiwi)을 통해 "\n"으로 구분된 텍스트
         """
-
         kiwi = Kiwi()
         for key, sentence in self.shorts_group.items():
             split_sentences = kiwi.split_into_sents(sentence)
@@ -150,7 +151,6 @@ def normalize_filename(title: str) -> str:
     # 길이 제한 (파일 시스템 제한 고려)
     if len(title) > 255:
         title = title[:255]
-
     return title
 
 
@@ -168,7 +168,6 @@ async def download_video(url: str) -> str:
 
     # 파일명 정규화
     normalized_title = normalize_filename(yt.title)
-
     ys = yt.streams.get_highest_resolution()
 
     if not os.path.exists("input"):
