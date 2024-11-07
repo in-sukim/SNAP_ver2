@@ -153,10 +153,11 @@ async def process_video_segment(
 ) -> bytes:
     """비디오 세그먼트를 9:16 비율로 변환하고 텍스트를 추가하여 추출하는 함수"""
     os.makedirs(INPUT_DIR, exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     temp_input = os.path.join(INPUT_DIR, "temp_input.mp4")
     temp_output = os.path.join(INPUT_DIR, "temp_output.mp4")
-    final_output = os.path.join(INPUT_DIR, "final_output.mp4")
+    final_output = os.path.join(OUTPUT_DIR, "final_output.mp4")
 
     with open(temp_input, "wb") as f:
         f.write(video_bytes)
@@ -179,8 +180,11 @@ async def process_video_segment(
             else "/System/Library/Fonts/AppleSDGothicNeoB.ttc"
         )
 
+        # 텍스트를 안전하게 처리
+        safe_overlay_text = overlay_text.replace(":", r"\:").replace("'", r"\'")
+
         drawtext_filter = (
-            f"drawtext=text='{overlay_text}'"
+            f"drawtext=text='{safe_overlay_text}'"
             f":fontfile='{font_path}'"
             ":fontsize=48"
             ":fontcolor=white"
@@ -200,7 +204,7 @@ async def process_video_segment(
             "-c:a",
             "copy",
             "-threads",
-            "4",  # CPU 스레드 수 지정
+            "4",
             "-y",
             final_output,
         ]
@@ -209,7 +213,6 @@ async def process_video_segment(
             *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        # 비동기로 프로세스 완료 대기
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
@@ -513,7 +516,7 @@ def apply_custom_css():
         /* 파일 업로더 레이블 스타일링 */
         .uploadedFile > label {
             white-space: normal !important;  /* 줄 바꿈 허용 */
-            min-height: 1.6em;  /* 최소 높이 설정 */
+            min-height: 1.6em;  /* 최�� 높이 설정 */
             line-height: 1.4;  /* 줄 간격 조정 */
         }
         
@@ -667,8 +670,12 @@ def app_main():
         openai_api_key = st.text_input(
             "OpenAI API 키를 입력하세요",
             type="password",
-            value=st.session_state.openai_api_key if st.session_state.openai_api_key else "",
-            help="OpenAI API 키가 필요합니다. https://platform.openai.com/account/api-keys 에서 발급받을 수 있습니다."
+            value=(
+                st.session_state.openai_api_key
+                if st.session_state.openai_api_key
+                else ""
+            ),
+            help="OpenAI API 키가 필요합니다. https://platform.openai.com/account/api-keys 에서 발급받을 수 있습니다.",
         )
 
         # URL 입력 필드
@@ -741,7 +748,7 @@ def app_main():
             st.session_state.openai_api_key = openai_api_key
             # 환경 변수로 설정
             os.environ["OPENAI_API_KEY"] = openai_api_key
-            
+
             st.session_state.processing_complete = False
             st.session_state.output_files = []
             asyncio.run(process_video(url))
