@@ -1,4 +1,8 @@
-# YouTube Highlight Extractor 🎬
+<div align="center">
+  <h1>
+    YouTube Highlight Extractor 🎬
+  </h1>
+</div>
 
 <div align="center">
 
@@ -11,39 +15,26 @@ YouTube 영상의 하이라이트를 AI로 자동 추출하고 쇼츠(9:16) 형�
 20분 영상 기준 약 10초만에 5개의 하이라이트 클립을 추출합니다.
 
 [주요 기능](#주요-기능) •
-[데모](#데모) •
 [설치 방법](#설치-방법) •
 [사용 방법](#사용-방법) •
-[기여하기](#기여하기)
 
 </div>
 
+<br>
+
 ## 📌 주요 기능
 
-### 🤖 AI 기반 하이라이트 추출
-- GPT-4 기반 영상 내용 분석 및 중요 구간 식별
-- 영상 카테고리별 최적화된 하이라이트 선정 알고리즘
-- 자동 클립 수 조절
-  - 20분 미만: 3개 클립
-  - 20분 이상: 5개 클립
+<div align="center">
+  
+| 🤖 AI 기반 하이라이트 추출 | 📱 쇼츠 최적화 | ⚡ 고성능 처리 |
+|---|---|---|
+| GPT-4o 기반 영상 내용 분석 및 중요 구간 식별 | 9:16 비율 자동 변환 | 비디오 다운로드/분석 병렬 처리로 빠른 속도
+| 영상 카테고리별 최적화된 하이라이트 선정 알고리즘 | 자막 기반 상단 텍스트 오버레이 | FFmpeg 기반 고효율 비디오 처리   
+| 자동 클립 수 조절 | 구간별 미세 조정 지원 | GPU 가속 지원  
 
-### 📱 쇼츠 최적화
-- 9:16 비율 자동 변환
-- 자막 기반 상단 텍스트 오버레이
-- 구간별 미세 조정 지원
+</div>
 
-### ⚡ 고성능 처리
-- 비디오 다운로드/분석 병렬 처리로 빠른 속도
-- FFmpeg 기반 고효율 비디오 처리
-- GPU 가속 지원
-  - NVIDIA CUDA
-  - Apple Silicon
-
-## 🎥 데모
-
-| 원본 영상 | 변환된 쇼츠 |
-|:---:|:---:|
-| <img src="docs/images/original.gif" width="320"> | <img src="docs/images/shorts.gif" width="180"> |
+<br>
 
 ## ⚙️ 설치 방법
 
@@ -71,6 +62,8 @@ pip install -r requirements.txt
 OPENAI_API_KEY=your_api_key_here
 ```
 
+<br>
+
 ## 🚀 사용 방법
 
 1. 애플리케이션 실행
@@ -79,14 +72,18 @@ streamlit run app.py
 ```
 
 2. 웹 인터페이스 사용
-- YouTube URL 입력
-- 폰트 파일 업로드 (선택사항)
-- "하이라이트 추출" 버튼 클릭
+
+| YouTube URL 입력<br>폰트 파일 업로드 (선택사항)<br>"하이라이트 추출" 버튼 클릭 | 결과 |
+|:---:|:---:|
+| <img src="https://github.com/user-attachments/assets/2f120cfb-95e1-4abe-9fb1-9a514d0e65e4" height=350 width=720> | <img src="https://github.com/user-attachments/assets/ba53d9c1-ec79-4d6c-a058-bc47a316c259" height=350 width=720> |
 
 3. 결과물 커스터마이징
-- 텍스트 오버레이 편집
-- 클립 구간 미세 조정
-- 비율 조정 및 다운로드
+
+| 텍스트 오버레이 편집<br>클립 구간 미세 조정(선택사항)<br>비율 조정 및 다운로드 | 결과 |
+|:---:|:---:|
+| <img src="https://github.com/user-attachments/assets/ba53d9c1-ec79-4d6c-a058-bc47a316c259" height=350 width=700> | <img src="https://github.com/user-attachments/assets/4dd8b394-0585-4491-b57e-ec26250495f6" height=430 width=300> |
+
+<br>
 
 ## 🛠️ 기술 스택
 
