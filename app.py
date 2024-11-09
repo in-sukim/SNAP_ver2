@@ -705,17 +705,7 @@ def app_main():
     if "font_file" not in st.session_state:
         st.session_state.font_file = None
     if "openai_api_key" not in st.session_state:
-        # .env 파일에서 API 키 확인
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-            st.session_state.openai_api_key = api_key
-            st.success(".env 파일에서 API 키를 불러왔습니다.")
-        else:
-            st.session_state.openai_api_key = None
-            if env_loaded:
-                st.warning(".env 파일은 있지만 OPENAI_API_KEY가 설정되지 않았습니다.")
-            else:
-                st.info(".env 파일을 찾을 수 없습니다. API 키를 직접 입력해주세요.")
+        st.session_state.openai_api_key = None
 
     # 메인 타이틀과 설명
     st.markdown(
@@ -727,17 +717,14 @@ def app_main():
         unsafe_allow_html=True,
     )
 
-    # 모든 입 요소를 form으로 감싸기
+    # 모든 입력 요소를 form으로 감싸기
     with st.form("main_form", clear_on_submit=False):
-        # OpenAI API 키가 .env에 없는 경우에만 입력 필드 표시
-        if not st.session_state.openai_api_key:
-            openai_api_key = st.text_input(
-                "OpenAI API 키를 입력하세요",
-                type="password",
-                help="OpenAI API 키가 필요합니다. https://platform.openai.com/account/api-keys 에서 발급받을 수 있습니다.",
-            )
-        else:
-            openai_api_key = st.session_state.openai_api_key
+        # OpenAI API 키 입력 필드 (항상 표시)
+        openai_api_key = st.text_input(
+            "OpenAI API 키를 입력하세요",
+            type="password",
+            help="OpenAI API 키가 필요합니다. https://platform.openai.com/account/api-keys 에서 발급받을 수 있습니다.",
+        )
 
         # URL 입력 필드
         url = st.text_input(
@@ -798,18 +785,17 @@ def app_main():
         reset_session_state()
 
     if extract_button:
-        if not openai_api_key and not st.session_state.openai_api_key:
+        if not openai_api_key:
             st.error("OpenAI API 키를 입력해주세요.")
         elif not url:
             st.warning("URL을 입력해주세요.")
         elif not validate_youtube_url(url):
             st.error("올바른 YouTube URL을 입력해주세요.")
         else:
-            # API 키를 세션 상태에 저장 (입력된 경우에만)
-            if openai_api_key and openai_api_key != st.session_state.openai_api_key:
-                st.session_state.openai_api_key = openai_api_key
+            # API 키를 세션 상태에 저장
+            st.session_state.openai_api_key = openai_api_key
             # 환경 변수로 설정
-            os.environ["OPENAI_API_KEY"] = st.session_state.openai_api_key
+            os.environ["OPENAI_API_KEY"] = openai_api_key
 
             st.session_state.processing_complete = False
             st.session_state.output_files = []
