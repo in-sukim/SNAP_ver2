@@ -16,6 +16,7 @@ from util.video_utils import get_video_duration
 from datetime import datetime
 import re
 import logging
+import subprocess
 
 # 로깅 설정
 logging.basicConfig(
@@ -33,9 +34,15 @@ st.set_page_config(
 def initialize_directories():
     """입출력 디렉토리 초기화."""
     for dir_path in [INPUT_DIR, OUTPUT_DIR]:
-        if not os.path.exists(dir_path):
-            os.makedirs(dir_path)
-            logger.info(f"Created directory: {dir_path}")
+        try:
+            if not os.path.exists(dir_path):
+                os.makedirs(dir_path)
+                logger.info(f"Created directory: {dir_path}")
+            # 디렉토리 권한 확인 및 설정
+            os.chmod(dir_path, 0o777)
+        except Exception as e:
+            logger.error(f"Directory initialization error: {e}")
+            st.error(f"디렉토리 생성 중 오류 발생: {e}")
 
 
 def clean_directories():
@@ -89,42 +96,43 @@ async def process_video(url: str):
     try:
         # 이전 결과 정리
         clean_directories()
+        logger.info("Directories cleaned")
 
         # 모든 상태 초기화
         if "clips_initialized" in st.session_state:
             del st.session_state.clips_initialized
-
-        for idx in range(1, 11):
-            if f"converted_video_{idx}" in st.session_state:
-                del st.session_state[f"converted_video_{idx}"]
-            if f"converting_{idx}" in st.session_state:
-                del st.session_state[f"converting_{idx}"]
-            if f"status_text_{idx}" in st.session_state:
-                del st.session_state[f"status_text_{idx}"]
-            if f"overlay_text_{idx}" in st.session_state:
-                del st.session_state[f"overlay_text_{idx}"]
+        logger.info("Session state reset")
 
         # 중앙 정렬된 스피너와 로딩 메시지
         with st.spinner("🎬 영상 처리 중..."):
+            logger.info("Starting main processing")
             await main(url)
+            logger.info("Main processing completed")
             st.session_state.processing_complete = True
 
-        st.success("처리가 완료되었습니다!")
-
-        # 결과 영상 정보 저장
+        # 결과 파일 확인
         output_files = []
         for root, dirs, files in os.walk(OUTPUT_DIR):
+            logger.info(f"Checking directory: {root}")
+            logger.info(f"Found files: {files}")
             for file in files:
                 if file.endswith(".mp4"):
                     file_path = os.path.join(root, file)
+                    logger.info(f"Processing output file: {file_path}")
                     title = os.path.splitext(file)[0]
-                    with open(file_path, "rb") as f:
-                        video_bytes = f.read()
-                    output_files.append((file_path, title, video_bytes))
+                    try:
+                        with open(file_path, "rb") as f:
+                            video_bytes = f.read()
+                        output_files.append((file_path, title, video_bytes))
+                        logger.info(f"Successfully added file: {file_path}")
+                    except Exception as e:
+                        logger.error(f"Error reading file {file_path}: {e}")
 
         st.session_state.output_files = output_files
+        logger.info(f"Total output files processed: {len(output_files)}")
 
     except Exception as e:
+        logger.error(f"Error in process_video: {e}")
         st.error(f"오류가 발생했습니다: {str(e)}")
 
 
@@ -280,6 +288,14 @@ def format_time(seconds: float) -> str:
 
 def display_results():
     """처리 결과 표시"""
+    logger.info(f"Display results called. Processing complete: {st.session_state.processing_complete}")
+    logger.info(f"Number of output files: {len(st.session_state.output_files)}")
+    
+    if not st.session_state.output_files:
+        logger.warning("No output files found in session state")
+        st.warning("처리된 결과물이 없습니다.")
+        return
+
     if st.session_state.output_files:
         # 전체를 감싸는 컨테이너 생성
         container = st.container()
@@ -674,7 +690,7 @@ def apply_custom_css():
 
 
 def get_default_font_path():
-    """시스템에 따른 기본 폰트 경로 반환"""
+    """시스템에 른 기본 폰트 경로 반환"""
     font_paths = [
         # Linux 폰트 경로
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
@@ -692,8 +708,24 @@ def get_default_font_path():
     return font_paths[0]  # 기본값으로 첫 번째 경로 사용
 
 
+def check_ffmpeg():
+    """FFmpeg 설치 확인"""
+    try:
+        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+        logger.info("FFmpeg is installed and working")
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        logger.error("FFmpeg is not installed or not working")
+        st.error("FFmpeg가 설치되어 있지 않거나 실행할 수 없습니다.")
+        return False
+
+
 def app_main():
     """스트림릿 앱 메인 함수"""
+    # FFmpeg 확인
+    if not check_ffmpeg():
+        return
+    
     # 커스텀 CSS 적용
     apply_custom_css()
 
