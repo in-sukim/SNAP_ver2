@@ -288,9 +288,11 @@ def format_time(seconds: float) -> str:
 
 def display_results():
     """처리 결과 표시"""
-    logger.info(f"Display results called. Processing complete: {st.session_state.processing_complete}")
+    logger.info(
+        f"Display results called. Processing complete: {st.session_state.processing_complete}"
+    )
     logger.info(f"Number of output files: {len(st.session_state.output_files)}")
-    
+
     if not st.session_state.output_files:
         logger.warning("No output files found in session state")
         st.warning("처리된 결과물이 없습니다.")
@@ -708,24 +710,21 @@ def get_default_font_path():
     return font_paths[0]  # 기본값으로 첫 번째 경로 사용
 
 
-def check_ffmpeg():
-    """FFmpeg 설치 확인"""
-    try:
-        subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
-        logger.info("FFmpeg is installed and working")
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        logger.error("FFmpeg is not installed or not working")
-        st.error("FFmpeg가 설치되어 있지 않거나 실행할 수 없습니다.")
-        return False
+# def check_ffmpeg():
+#     """FFmpeg 설치 확인"""
+#     try:
+#         subprocess.run(['ffmpeg', '-version'], capture_output=True, check=True)
+#         logger.info("FFmpeg is installed and working")
+#         return True
+#     except (subprocess.CalledProcessError, FileNotFoundError):
+#         logger.error("FFmpeg is not installed or not working")
+#         st.error("FFmpeg가 설치되어 있지 않거나 실행할 수 없습니다.")
+#         return False
 
 
 def app_main():
     """스트림릿 앱 메인 함수"""
-    # FFmpeg 확인
-    if not check_ffmpeg():
-        return
-    
+
     # 커스텀 CSS 적용
     apply_custom_css()
 
