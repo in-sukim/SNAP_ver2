@@ -5,6 +5,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium import webdriver
 import time
 from functools import wraps
+import logging
 
 from pytubefix import YouTube
 from pytubefix.cli import on_progress
@@ -18,6 +19,14 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 import unicodedata
 
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
+
 
 def time_measure_decorator(func):
     @wraps(func)
@@ -25,7 +34,9 @@ def time_measure_decorator(func):
         start_time = time.time()
         result = func(*args, **kwargs)
         end_time = time.time()
-        print(f"Execution time of {func.__name__}: {end_time - start_time:.4f} seconds")
+        logger.info(
+            f"Execution time of {func.__name__}: {end_time - start_time:.4f} seconds"
+        )
         return result
 
     return wrapper
@@ -42,93 +53,129 @@ class YouTubeVideo:
         self.shorts_group, self.shorts_all_text = self.get_shorts_group()
 
     def get_video_id(self, video_url):
-        video_id = video_url.split("v=")[1][:11]
-        return video_id
+        """비디오 ID 추출"""
+        try:
+            video_id = video_url.split("v=")[1][:11]
+            logger.info(f"Extracted video ID: {video_id}")
+            return video_id
+        except Exception as e:
+            logger.error(f"Failed to extract video ID from URL: {str(e)}")
+            raise
 
     def get_transcript(self):
-        transcript = YouTubeTranscriptApi.get_transcript(
-            self.video_id, languages=["ko", "en"]
-        )
-        return transcript
+        """유튜브 영상 자막 가져오기"""
+        try:
+            logger.info(f"Attempting to fetch transcript for video ID: {self.video_id}")
+            transcript = YouTubeTranscriptApi.get_transcript(
+                self.video_id, languages=["ko", "en"]
+            )
+            logger.info(
+                f"Successfully retrieved transcript with {len(transcript)} entries"
+            )
+            return transcript
+        except Exception as e:
+            logger.error(f"Failed to get transcript: {str(e)}")
+            logger.warning("Returning empty transcript as fallback")
+            return []
 
     def get_category(self):
-        """
-        유튜브 영상 카테고리 반환
-        Args:
-            video_url: 유튜브 영상 URL
-            user_agent: User-Agent
-        Returns:
-            category: 유튜브 영상 카테고리
-        """
+        """유튜브 영상 카테고리 반환"""
+        logger.info("Setting up Chrome options...")
         options = webdriver.ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--disable-software-rasterizer")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-dev-tools")
+        options.add_argument("--no-zygote")
+        options.add_argument("--single-process")
+        options.add_argument("--ignore-certificate-errors")
+        options.add_argument("--window-size=1920,1080")
+        options.add_argument("--remote-debugging-port=9222")
+        options.binary_location = "/usr/bin/chromium"
 
-        # ChromeDriver를 자동으로 설치하고 관리
-        service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
+        logger.info("Chrome options configured with following arguments:")
+        for arg in options.arguments:
+            logger.info(f"  - {arg}")
+
+        logger.info(f"Chrome binary location: {options.binary_location}")
+        logger.info("Initializing Chrome service...")
 
         try:
+            service = Service(
+                executable_path="/usr/bin/chromedriver", service_args=["--verbose"]
+            )
+            logger.info(f"Chrome service initialized with path: {service.path}")
+
+            logger.info("Attempting to start Chrome driver...")
+            driver = webdriver.Chrome(service=service, options=options)
+            logger.info("Chrome driver started successfully")
+
+            logger.info(f"Fetching page content from: {self.video_url}")
             driver.get(self.video_url)
+            logger.info("Page loaded successfully")
+
+            logger.info("Extracting category from page source...")
             html = driver.page_source
             category = html.split('"category":"')[1].split('",')[0]
-        finally:
-            driver.quit()
+            logger.info(f"Successfully extracted category: {category}")
 
-        return category
+            return category
+        except Exception as e:
+            logger.error(f"Error getting category: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
+            # if isinstance(e, webdriver.WebDriverException):
+            #     logger.error(f"WebDriver error message: {e.msg}")
+            logger.warning("Returning 'Unknown' as fallback category")
+            return "Unknown"
+        finally:
+            try:
+                logger.info("Attempting to close Chrome driver...")
+                driver.quit()
+                logger.info("Chrome driver closed successfully")
+            except Exception as e:
+                logger.error(f"Error closing Chrome driver: {str(e)}")
 
     def get_shorts_group(self):
-        """
-        60초 이내 구간으로 스크립트 그룹화.
-        Args:
-            transcript: 유튜브 영상 자막 (List of dictionary)
-                - text: 자막 텍스트
-                - start: 자막 시작 시간
-                - duration: 자막 지속 시간
-        Returns:
-            shorts: 60초 이내 구간으로 스크립트 그룹화된 dictionary
-                - key: 60초 이내 구간 index(0부터 시작)
-                - value: 60초 이내 구간의 자막 텍스트
-        """
-        shorts = {}
-        shorts_all_text = ""
-        for i in range(len(self.transcript)):
-            trans = self.transcript[i]
-            text, start, duration = trans["text"], trans["start"], trans["duration"]
-            shorts_group = int(start // 60)
-            if shorts_group not in shorts:
-                shorts[shorts_group] = []
-            shorts[shorts_group] += [text]
-        shorts = {key: f"[{key}] " + " ".join(text) for key, text in shorts.items()}
-        shorts_all_text = "\n\n".join(shorts.values())
-        return shorts, shorts_all_text
+        """60초 이내 구간으로 스크립트 그룹화"""
+        try:
+            logger.info("Starting transcript grouping process...")
+            shorts = {}
+            shorts_all_text = ""
 
-    def get_fix_sentences_shorts_group(self):
-        """
-        shorts_group 구간 별 text 문장 "\n"으로 구분하여 반환
-        Args:
-            shorts_group: 60초 이내 구간으로 스크립트 그룹화된 dictionary
-                - key: 60초 이내 구간 index(0부터 시작)
-                - value: 60초 이내 구간의 자막 텍스트
-        Returns:
-            fix_shorts_gorup: value 문장 "\n"으로 구분하여 반환
-                - key: 60초 이내 구간 index(0부터 시작)
-                - value: 60초 이내 구간의 자막 문장 분할(kiwi)을 통해 "\n"으로 구분된 텍스트
-        """
-        kiwi = Kiwi()
-        for key, sentence in self.shorts_group.items():
-            split_sentences = kiwi.split_into_sents(sentence)
-            fix_sencences = ""
-            for sen in split_sentences:
-                fix_sencences += sen.text + "\n"
-            self.shorts_group[key] = fix_sencences
-        return self.shorts_group
+            logger.info(f"Processing {len(self.transcript)} transcript entries")
+            for i in range(len(self.transcript)):
+                trans = self.transcript[i]
+                text, start, duration = trans["text"], trans["start"], trans["duration"]
+                shorts_group = int(start // 60)
+                if shorts_group not in shorts:
+                    shorts[shorts_group] = []
+                shorts[shorts_group] += [text]
+
+            logger.info(f"Created {len(shorts)} groups")
+            shorts = {key: f"[{key}] " + " ".join(text) for key, text in shorts.items()}
+            shorts_all_text = "\n\n".join(shorts.values())
+
+            logger.info("Successfully grouped transcripts")
+            return shorts, shorts_all_text
+        except Exception as e:
+            logger.error(f"Error in transcript grouping: {str(e)}")
+            return {}, ""
 
     def get_duration(self) -> int:
-        """영상 길이(초) 반환."""
-        yt = YouTube(self.video_url)
-        return yt.length  # 초 단위로 반환
+        """영상 길이(초) 반환"""
+        try:
+            logger.info(f"Getting duration for video: {self.video_url}")
+            yt = YouTube(self.video_url)
+            duration = yt.length
+            logger.info(f"Video duration: {duration} seconds")
+            return duration
+        except Exception as e:
+            logger.error(f"Failed to get video duration: {str(e)}")
+            raise
 
 
 def normalize_filename(title: str) -> str:
@@ -155,58 +202,61 @@ def normalize_filename(title: str) -> str:
 
 
 async def download_video(url: str) -> str:
-    """유튜브 영상 다운로드.
+    """유튜브 영상 다운로드"""
+    try:
+        logger.info(f"Starting download process for URL: {url}")
+        yt = YouTube(url, on_progress_callback=on_progress)
+        logger.info(f"Video title: {yt.title}")
 
-    Args:
-        url: 유튜브 영상 URL
+        normalized_title = normalize_filename(yt.title)
+        logger.info(f"Normalized title: {normalized_title}")
 
-    Returns:
-        str: 다운로드된 영상의 제목
-    """
-    yt = YouTube(url, on_progress_callback=on_progress)
-    print(yt.title)
+        ys = yt.streams.get_highest_resolution()
+        logger.info(f"Selected stream resolution: {ys.resolution}")
 
-    # 파일명 정규화
-    normalized_title = normalize_filename(yt.title)
-    ys = yt.streams.get_highest_resolution()
+        if not os.path.exists("input"):
+            logger.info("Creating input directory")
+            os.makedirs("input")
 
-    if not os.path.exists("input"):
-        os.makedirs("input")
-
-    loop = asyncio.get_event_loop()
-    with ThreadPoolExecutor() as pool:
-        # 정규화된 파일명으로 저장
-        await loop.run_in_executor(
-            pool,
-            lambda: ys.download(
-                output_path="input", filename=f"{normalized_title}.mp4"
-            ),
-        )
-
-    return normalized_title
+        logger.info("Starting download...")
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            await loop.run_in_executor(
+                pool,
+                lambda: ys.download(
+                    output_path="input", filename=f"{normalized_title}.mp4"
+                ),
+            )
+        logger.info("Download completed successfully")
+        return normalized_title
+    except Exception as e:
+        logger.error(f"Download failed: {str(e)}")
+        raise
 
 
 async def make_clip_video(path, save_path, start_t, end_t):
+    """클립 비디오 생성"""
     try:
-        # 입력 파일 경로
-        input_file = path
+        logger.info(f"Processing clip: {save_path}")
+        logger.info(f"Time range: {start_t} to {end_t}")
 
-        # 출력 디렉토리 생성 (output/영상제목/)
+        input_file = path
         output_dir = os.path.join("output", os.path.splitext(os.path.basename(path))[0])
         os.makedirs(output_dir, exist_ok=True)
-
-        # 최종 저장 경로
         final_save_path = os.path.join(output_dir, save_path)
 
-        # 클립 영상 생성 비동기 처리
+        logger.info(f"Output directory: {output_dir}")
+        logger.info(f"Final save path: {final_save_path}")
+
         loop = asyncio.get_event_loop()
         with ThreadPoolExecutor() as pool:
             await loop.run_in_executor(
                 pool,
                 lambda: process_video_clip(input_file, final_save_path, start_t, end_t),
             )
+        logger.info("Clip processing completed")
     except Exception as e:
-        print(f"Error processing video clip: {str(e)}")
+        logger.error(f"Error processing video clip: {str(e)}")
 
 
 def process_video_clip(path, final_save_path, start_t, end_t):
@@ -216,15 +266,13 @@ def process_video_clip(path, final_save_path, start_t, end_t):
 
         try:
             if start_t > duration or end_t > duration:
-                print(
+                logger.warning(
                     f"Start time or end time is greater than the video duration. Adjusting end time."
                 )
                 end_t = min(end_t, duration)
-                start_t = min(start_t, duration - 10)  # 최소 10초 전까지 클립 생성
+                start_t = min(start_t, duration - 10)
 
             clip = video.subclip(start_t, end_t)
-
-            # 임시 파일명으로 먼저 저장
             temp_path = final_save_path + ".temp.mp4"
             clip.write_videofile(
                 temp_path,
@@ -235,7 +283,6 @@ def process_video_clip(path, final_save_path, start_t, end_t):
                 threads=4,
             )
 
-            # 성공적으로 생성되면 최종 파일명으로 변경
             if os.path.exists(temp_path):
                 if os.path.exists(final_save_path):
                     os.remove(final_save_path)
@@ -246,7 +293,7 @@ def process_video_clip(path, final_save_path, start_t, end_t):
             video.close()
 
     except Exception as e:
-        print(f"Error in process_video_clip: {str(e)}")
+        logger.error(f"Error in process_video_clip: {str(e)}")
         raise
 
 
@@ -258,6 +305,6 @@ if __name__ == "__main__":
     transcript = video.transcript
     shorts_group = video.shorts_group
 
-    print(
+    logger.info(
         f"Video ID: {video_id}\nCategory: {category}\nShorts Group Example: {shorts_group[0]}"
     )

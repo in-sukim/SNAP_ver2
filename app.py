@@ -15,6 +15,15 @@ from util.ffmpeg_processor import FFmpegProcessor, VideoSegment
 from util.video_utils import get_video_duration
 from datetime import datetime
 import re
+import logging
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()],
+)
+logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="YouTube Highlight Extractor", page_icon="🎬", layout="wide"
@@ -26,14 +35,26 @@ def initialize_directories():
     for dir_path in [INPUT_DIR, OUTPUT_DIR]:
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
+            logger.info(f"Created directory: {dir_path}")
 
 
 def clean_directories():
     """이전 처리 결과 정리."""
     for dir_path in [INPUT_DIR, OUTPUT_DIR]:
         if os.path.exists(dir_path):
-            shutil.rmtree(dir_path)
-    initialize_directories()
+            for item in os.listdir(dir_path):
+                item_path = os.path.join(dir_path, item)
+                try:
+                    if os.path.isfile(item_path):
+                        os.unlink(item_path)
+                    elif os.path.isdir(item_path):
+                        shutil.rmtree(item_path)
+                    logger.info(f"Cleaned up: {item_path}")
+                except Exception as e:
+                    logger.error(f"Error cleaning up {item_path}: {e}")
+        else:
+            os.makedirs(dir_path)
+            logger.info(f"Created directory: {dir_path}")
 
 
 def validate_youtube_url(url: str) -> bool:
@@ -190,7 +211,7 @@ async def process_video_segment(
         font_path = (
             st.session_state.font_file
             if st.session_state.font_file
-            else "/System/Library/Fonts/AppleSDGothicNeoB.ttc"
+            else "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc"
         )
 
         # 텍스트를 안전하게 처리
@@ -248,7 +269,7 @@ async def process_video_segment(
 
 
 def format_time(seconds: float) -> str:
-    """초를 시:분:초 형식으로 포맷팅."""
+    """초를 시:분:초 형으로 포맷팅."""
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
     seconds = int(seconds % 60)
@@ -652,6 +673,25 @@ def apply_custom_css():
     )
 
 
+def get_default_font_path():
+    """시스템에 따른 기본 폰트 경로 반환"""
+    font_paths = [
+        # Linux 폰트 경로
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/noto-cjk/NotoSansCJK-Bold.ttc",
+        # macOS 폰트 경로
+        "/System/Library/Fonts/AppleSDGothicNeoB.ttc",
+    ]
+
+    for path in font_paths:
+        if os.path.exists(path):
+            logger.info(f"Using font: {path}")
+            return path
+
+    logger.warning("No default font found, using first available system font")
+    return font_paths[0]  # 기본값으로 첫 번째 경로 사용
+
+
 def app_main():
     """스트림릿 앱 메인 함수"""
     # 커스텀 CSS 적용
@@ -687,7 +727,7 @@ def app_main():
         unsafe_allow_html=True,
     )
 
-    # 모든 입력 요소를 form으로 감싸기
+    # 모든 입 요소를 form으로 감싸기
     with st.form("main_form", clear_on_submit=False):
         # OpenAI API 키가 .env에 없는 경우에만 입력 필드 표시
         if not st.session_state.openai_api_key:

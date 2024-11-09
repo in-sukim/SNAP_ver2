@@ -4,6 +4,18 @@ import os
 import asyncio
 import subprocess
 from .constants import *
+import json
+import logging
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -31,6 +43,8 @@ class FFmpegProcessor:
         """
         self.input_path = input_path
         self.output_dir = self._create_output_dir()
+        self.use_gpu = self._check_gpu_support()
+        logger.info(f"GPU acceleration: {'enabled' if self.use_gpu else 'disabled'}")
 
     def _create_output_dir(self) -> str:
         """출력 디렉토리 생성."""
@@ -82,7 +96,7 @@ class FFmpegProcessor:
             ]
 
             # GPU 가속 지원 확인 및 적용
-            if self._check_gpu_support():
+            if self.use_gpu:
                 cmd = self._add_gpu_options(cmd)
 
             process = await asyncio.create_subprocess_exec(
@@ -111,6 +125,7 @@ class FFmpegProcessor:
             # NVIDIA GPU 확인
             result = subprocess.run(["nvidia-smi"], capture_output=True)
             if result.returncode == 0:
+                logger.info("NVIDIA GPU detected")
                 return True
 
             # Apple Silicon 확인
@@ -119,10 +134,13 @@ class FFmpegProcessor:
                     ["sysctl", "machdep.cpu.brand_string"], capture_output=True
                 )
                 if b"Apple" in result.stdout:
+                    logger.info("Apple Silicon detected")
                     return True
 
+            # GPU가 없는 경우 조용히 False 반환
             return False
         except:
+            # 예외가 발생해도 조용히 False 반환
             return False
 
     def _add_gpu_options(self, cmd: list) -> list:
